@@ -36,7 +36,6 @@ def savePhoto(frame,filename):
 def uploadPhoto(now,now_search,file):
     #파베 스토리지 주소: /pictures/ + file
     blob = bucket.blob('pictures/' + file)
-    #아래 코드 한줄 추가하니깐 에러남. 나중에 다시 한번 주석 해제 해보고 실행해보자.
     #blob.make_public()
     # new token, metadata 설정
     new_token = uuid4()
@@ -45,11 +44,8 @@ def uploadPhoto(now,now_search,file):
 
     blob.upload_from_filename(filename=picture_directory+file)
     print("사진 업로드 완료")
-    
-    #공개 저장소 링크 디버깅 코드. (출력된 주소를 웹에 입력하면 사진뜹니다.)
     print(blob.public_url)
     #스토리지 이미지를 public으로 접근 권한 부여하여 db에 메타정보를 연동하여 이를 이용
-    #search는 앱에서 검색하거나 정렬할 때 사용됨(202108입력하면 08월 사진 다뜸)
     #db.child("image_Data").child(now).child("image").set(blob.public_url)
     #db.child("image_Data").child(now).child("title").set(now)
     #db.child("image_Data").child(now).child("description").set(now+'에 찍힌 사진입니다.')
