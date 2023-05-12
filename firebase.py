@@ -9,6 +9,7 @@ import json
 import yolov5.utils.torch_utils
 import socket
 import json, threading
+from PIL import Image
 from firebase_admin import credentials
 from firebase_admin import storage
 from firebase_admin import firestore
@@ -18,8 +19,9 @@ from flask import Flask,request
 app = Flask(__name__)
 
 #load model
-model =torch.load('/home/ksb/yolov5/coopgo/coopgo_model/weights/best.pt')
-#model = torch.hub.load(os.getcwd(), 'custom', source='local', path = model_name, force_reload = True)
+#model =torch.load('/home/ksb/yolov5/coopgo/coopgo_model/weights/best.pt')
+model_name = '/home/ksb/yolov5/coopgo/coopgo_model/weights/best.pt'
+model = torch.hub.load(os.getcwd(), 'custom', source='local', path = model_name, force_reload = True)
 
 #firebase initialization
 PROJECT_ID = "coopgo-b58bd"
@@ -55,29 +57,31 @@ def savePhoto(frame,filename):
     cv2.imwrite(img_path, frame)
     return img_path
 
-def runModel(objects, img_path) : 
+def runModel(img_path) :
+    objects = {} 
+    #img = Image.open(img_path)
     print("Run Model")  
     results = model(img_path)
     detections = results.pandas().xyxy[0]
+            
     for _, detection in detections.iterrows():
         cls_name = detection['name']
         if cls_name not in objects:
             objects[cls_name] = 0
         objects[cls_name]+= 1
+    #print the objects    
     print(objects)    
-    if(objects != {}) :
+    if(objects) :
         results.show()
-        results.save(labels=True,save_dir= img_path+'res')
-        uploadPhoto(results)
         
     return objects    
 
-def uploadPhoto(file):
-    blob = bucket.blob('pictures/' + file)
+def uploadPhoto(filename):
+    blob = bucket.blob('pictures/' + filename)
     new_token = uuid4()
     metadata = {"firebaseStorageDownloadTokens": new_token}  
     blob.metadata = metadata
-    blob.upload_from_filename(filename=picture_directory+file)
+    blob.upload_from_filename(filename=picture_directory+filename)
     print("사진 delete & 업로드 완료")
     print(blob.public_url)
 
@@ -87,6 +91,7 @@ def capture(key):
     max_obj_num = 0
     max_objects = {}
     capture_cnt = 5 # take 5 pictures in a row
+    
     while capture_cnt > 0: 
         capture_cnt -= 1 
         now = datetime.datetime.now()
@@ -97,36 +102,38 @@ def capture(key):
         print(img_path)
         print("image saved")
         #count num of objects
-        objects = runModel(objects, img_path) # model
+        objects = runModel(img_path) # model
         if(len(objects) > max_obj_num):
             max_obj_num = len(objects)
             max_objects = objects
+            print(f'max objects : {0}'.format(objects))
             
     db.collection(u'detection').document(key).set(max_objects)
     print("firestore upload")
     uploadPhoto(filename)        
-    print("storage upload")        
+    print("storage upload")   
+    
                         
-                       
 # Create a callback on_snapshot function to capture changes
 
 def on_snapshot(col_snapshot, changes, read_time):
     global pre_document
-    print('shot')
-    if(len(changes)!= 1): 
-        return
-    for change in changes:
-        if change.type.name == 'ADDED':
-            print(f'{change.document.id}')
-            cur_document = change.document.id
-            if pre_document == cur_document:
-                return
-            pre_document = cur_document
-            doc_ref = db.collection(u'qr').document(cur_document)
-            capture(doc_ref.id)
-    callback_done.set()
+    print('ready')
+    if len(changes) == 1:
+        for change in changes:
+            if change.type.name == 'ADDED':
+                print(f'{change.document.id}')
+                cur_document = change.document.id
+                if pre_document == cur_document:
+                    break
+                pre_document = cur_document
+                doc_ref = db.collection(u'qr').document(cur_document)
+                #capture(doc_ref.id)
+                capture(cur_document)
+    
 
 # Watch the document
+query_watch = col_query.on_snapshot(on_snapshot)
 while True:
-    query_watch = col_query.on_snapshot(on_snapshot)
     callback_done.wait() 
+    callback_done.clear()
