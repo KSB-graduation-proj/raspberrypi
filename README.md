@@ -1,3 +1,3 @@
 라즈베리파이 4b
 
-라이브 스트리밍 중 물건이 감지되면 사진을 찍어 yolov5 model에 돌린 후 나온 결과값과 이미지를 firebase에 저장
+firestore에 qr정보가 업로드되면 사진을 찍어 yolov5모델을 돌린 결과를 firestore detection에 올림.
